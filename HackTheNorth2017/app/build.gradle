@@ -38,6 +38,7 @@ dependencies {
     compile 'com.google.firebase:firebase-messaging:10.2.4'
     compile 'com.google.firebase:firebase-core:10.2.4'
 
+    compile 'com.ibm.watson.developer_cloud:java-sdk:3.9.1'
 
 }
 apply plugin: 'com.google.gms.google-services'

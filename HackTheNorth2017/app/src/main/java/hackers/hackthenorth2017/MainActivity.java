@@ -2,6 +2,7 @@ package hackers.hackthenorth2017;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -34,7 +35,12 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
+import com.ibm.watson.developer_cloud.discovery.v1.model.environment.Environment;
+import com.ibm.watson.developer_cloud.visual_recognition.v3.VisualRecognition;
+import com.ibm.watson.developer_cloud.visual_recognition.v3.model.ClassifyImagesOptions;
+import com.ibm.watson.developer_cloud.visual_recognition.v3.model.VisualClassification;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -52,7 +58,6 @@ public class MainActivity extends AppCompatActivity {
     private ImageButton mPhotoPickerButton;
     private EditText mMessageEditText;
     private Button mSendButton;
-
     private String mUsername;
 
     // Firebase instance variables
@@ -63,6 +68,8 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseAuth.AuthStateListener mAuthStateListener;
     private FirebaseStorage mFirebaseStorage;
     private StorageReference mChatPhotosStorageReference;
+
+    public VisualRecognition service;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -184,6 +191,26 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         };
+
+        AsyncTask.THREAD_POOL_EXECUTOR.execute(new Runnable() {
+            @Override
+            public void run() {
+                LogUtil.d("starting to image recognize");
+                service = new VisualRecognition(VisualRecognition.VERSION_DATE_2016_05_20);
+                service.setApiKey("5969860b1f4bb027e4440408d436ea9a2f9d09d5");
+                File dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES);
+                LogUtil.d(dcim.getAbsolutePath());
+                File pic = new File("/sdcard/DCIM/b.jpg");
+
+                ClassifyImagesOptions options = new ClassifyImagesOptions.Builder()
+                        .images(pic)
+                        .build();
+
+                VisualClassification result = service.classify(options).execute();
+                LogUtil.d("Result for image classification" + result.toString());
+
+            }
+        });
     }
 
     @Override
