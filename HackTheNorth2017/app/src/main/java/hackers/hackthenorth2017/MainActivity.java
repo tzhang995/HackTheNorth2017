@@ -1,9 +1,13 @@
 package hackers.hackthenorth2017;
 
+import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.Editable;
@@ -16,6 +20,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.GridView;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.ProgressBar;
@@ -44,7 +49,17 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
+import android.Manifest;
+
 public class MainActivity extends AppCompatActivity {
+    private static final int REQUEST_EXTERNAL_STORAGE = 1;
+    private static String[] PERMISSIONS_STORAGE = {
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+    };
+
+
+    ArrayList<BasicMessage> data = new ArrayList<BasicMessage>();
 
     public static final String ANONYMOUS = "anonymous";
     public static final int DEFAULT_MSG_LENGTH_LIMIT = 1000;
@@ -52,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
     public static final int RC_SIGN_IN = 1;
     private static final int RC_PHOTO_PICKER = 2;
 
-    private ListView mMessageListView;
+    private GridView mMessageListView;
     private MessageAdapter mMessageAdapter;
     private ProgressBar mProgressBar;
     private ImageButton mPhotoPickerButton;
@@ -88,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Initialize references to views
         mProgressBar = (ProgressBar) findViewById(R.id.progressBar);
-        mMessageListView = (ListView) findViewById(R.id.messageListView);
+        mMessageListView = (GridView) findViewById(R.id.gridView);
         mPhotoPickerButton = (ImageButton) findViewById(R.id.photoPickerButton);
         mMessageEditText = (EditText) findViewById(R.id.messageEditText);
         mSendButton = (Button) findViewById(R.id.sendButton);
@@ -100,6 +115,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Initialize progress bar
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
+
+
+        ArrayList<BasicMessage> data = new ArrayList<BasicMessage>();
 
         // ImagePickerButton shows an image picker to upload a image for a message
         mPhotoPickerButton.setOnClickListener(new View.OnClickListener() {
@@ -192,25 +210,35 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        AsyncTask.THREAD_POOL_EXECUTOR.execute(new Runnable() {
-            @Override
-            public void run() {
-                LogUtil.d("starting to image recognize");
-                service = new VisualRecognition(VisualRecognition.VERSION_DATE_2016_05_20);
-                service.setApiKey("5969860b1f4bb027e4440408d436ea9a2f9d09d5");
-                File dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES);
-                LogUtil.d(dcim.getAbsolutePath());
-                File pic = new File("/sdcard/DCIM/b.jpg");
 
-                ClassifyImagesOptions options = new ClassifyImagesOptions.Builder()
-                        .images(pic)
-                        .build();
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
 
-                VisualClassification result = service.classify(options).execute();
-                LogUtil.d("Result for image classification" + result.toString());
+            // Should we show an explanation?
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.READ_CONTACTS)) {
+
+                // Show an explanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+
+            } else {
+
+                // No explanation needed, we can request the permission.
+
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_CONTACTS},
+                        1);
+
+                // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
+                // app-defined int constant. The callback method gets the
+                // result of the request.
 
             }
-        });
+        }
+
+        setDataAdapter();
     }
 
     @Override
@@ -314,6 +342,71 @@ public class MainActivity extends AppCompatActivity {
         if (mChildEventListener != null) {
             mMessagesDatabaseReference.removeEventListener(mChildEventListener);
             mChildEventListener = null;
+        }
+    }
+
+    private void setDataAdapter()
+    {
+        mMessageAdapter = new MessageAdapter(getApplicationContext(), R.layout.item_message, data);
+        mMessageListView.setAdapter(mMessageAdapter);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case 1: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                    // permission was granted, yay! Do the
+                    // contacts-related task you need to do.
+
+                    AsyncTask.THREAD_POOL_EXECUTOR.execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            LogUtil.d("starting to image recognize");
+                            service = new VisualRecognition(VisualRecognition.VERSION_DATE_2016_05_20);
+                            service.setApiKey("5969860b1f4bb027e4440408d436ea9a2f9d09d5");
+                            File dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES);
+                            LogUtil.d(dcim.getAbsolutePath());
+                            File pic = new File("/sdcard/DCIM/b.jpg");
+
+                            ClassifyImagesOptions options = new ClassifyImagesOptions.Builder()
+                                    .images(pic)
+                                    .build();
+
+                            VisualClassification result = service.classify(options).execute();
+                            LogUtil.d("Result for image classification" + result.toString());
+
+                        }
+                    });
+
+                } else {
+
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+                }
+                return;
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
+    }
+
+    public static void verifyStoragePermissions(Activity activity) {
+        // Check if we have write permission
+        int permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            // We don't have permission so prompt the user
+            ActivityCompat.requestPermissions(
+                    activity,
+                    PERMISSIONS_STORAGE,
+                    REQUEST_EXTERNAL_STORAGE
+            );
         }
     }
 }
