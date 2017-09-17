@@ -1,13 +1,19 @@
 package hackers.hackthenorth2017;
 
 import android.app.Activity;
+import android.app.DialogFragment;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.media.Image;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.Editable;
@@ -22,7 +28,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.GridView;
 import android.widget.ImageButton;
-import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
@@ -45,13 +50,21 @@ import com.ibm.watson.developer_cloud.visual_recognition.v3.VisualRecognition;
 import com.ibm.watson.developer_cloud.visual_recognition.v3.model.ClassifyImagesOptions;
 import com.ibm.watson.developer_cloud.visual_recognition.v3.model.VisualClassification;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import android.Manifest;
 
 public class MainActivity extends AppCompatActivity {
+    int TAKE_PHOTO_CODE = 6;
+    public static int count = 0;
+
+
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
     private static String[] PERMISSIONS_STORAGE = {
             Manifest.permission.READ_EXTERNAL_STORAGE,
@@ -71,8 +84,6 @@ public class MainActivity extends AppCompatActivity {
     private MessageAdapter mMessageAdapter;
     private ProgressBar mProgressBar;
     private ImageButton mPhotoPickerButton;
-    private EditText mMessageEditText;
-    private Button mSendButton;
     private String mUsername;
 
     // Firebase instance variables
@@ -85,6 +96,9 @@ public class MainActivity extends AppCompatActivity {
     private StorageReference mChatPhotosStorageReference;
 
     public VisualRecognition service;
+
+    public static Uri uri;
+    public File curFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -105,8 +119,6 @@ public class MainActivity extends AppCompatActivity {
         mProgressBar = (ProgressBar) findViewById(R.id.progressBar);
         mMessageListView = (GridView) findViewById(R.id.gridView);
         mPhotoPickerButton = (ImageButton) findViewById(R.id.photoPickerButton);
-        mMessageEditText = (EditText) findViewById(R.id.messageEditText);
-        mSendButton = (Button) findViewById(R.id.sendButton);
 
         // Initialize message ListView and its adapter
         List<BasicMessage> friendlyMessages = new ArrayList<>();
@@ -116,50 +128,38 @@ public class MainActivity extends AppCompatActivity {
         // Initialize progress bar
         mProgressBar.setVisibility(ProgressBar.INVISIBLE);
 
-
+        final String dir = "/sdcard/DCIM/";
         ArrayList<BasicMessage> data = new ArrayList<BasicMessage>();
 
         // ImagePickerButton shows an image picker to upload a image for a message
         mPhotoPickerButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.setType("image/jpeg");
-                intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
-                startActivityForResult(Intent.createChooser(intent, "Complete action using"), RC_PHOTO_PICKER);
-            }
-        });
-
-        // Enable Send button when there's text to send
-        mMessageEditText.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence charSequence, int i, int i1, int i2) {
-                if (charSequence.toString().trim().length() > 0) {
-                    mSendButton.setEnabled(true);
-                } else {
-                    mSendButton.setEnabled(false);
+//                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+//                intent.setType("image/jpeg");
+//                intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+//                startActivityForResult(Intent.createChooser(intent, "Complete action using"), RC_PHOTO_PICKER);
+                Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                // Ensure that there's a camera activity to handle the intent
+                if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+                    // Create the File where the photo should go
+                    File photoFile = null;
+                    try {
+                        photoFile = createImageFile();
+                    } catch (IOException ex) {
+                        // Error occurred while creating the File
+                    }
+                    // Continue only if the File was successfully created
+                    if (photoFile != null) {
+                        Uri photoURI = FileProvider.getUriForFile(getApplicationContext(),
+                                "hackers.hackthenorth2017.fileprovider",
+                                photoFile);
+                        uri = photoURI;
+                        takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+                        startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+                    }
                 }
-            }
 
-            @Override
-            public void afterTextChanged(Editable editable) {
-            }
-        });
-        mMessageEditText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(DEFAULT_MSG_LENGTH_LIMIT)});
-
-        // Send button sends a message and clears the EditText
-        mSendButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                BasicMessage friendlyMessage = new BasicMessage(mMessageEditText.getText().toString(), mUsername, null);
-                mMessagesDatabaseReference.push().setValue(friendlyMessage);
-
-                // Clear input box
-                mMessageEditText.setText("");
             }
         });
 
@@ -241,6 +241,9 @@ public class MainActivity extends AppCompatActivity {
         setDataAdapter();
     }
 
+    static final int REQUEST_TAKE_PHOTO = 6;
+
+    static final int FILTER_PHOTO = 101;
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -254,6 +257,35 @@ public class MainActivity extends AppCompatActivity {
                 finish();
             }
         } else if (requestCode == RC_PHOTO_PICKER && resultCode == RESULT_OK) {
+            Uri selectedImageUri = data.getData();
+
+            // Get a reference to store file at chat_photos/<FILENAME>
+            StorageReference photoRef = mChatPhotosStorageReference.child(selectedImageUri.getLastPathSegment());
+
+            // Upload file to Firebase Storage
+            photoRef.putFile(selectedImageUri)
+                    .addOnSuccessListener(this, new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                        public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                            // When the image has successfully uploaded, we get its download URL
+                            Uri downloadUrl = taskSnapshot.getDownloadUrl();
+
+                            // Set the download URL to the message box, so that the user can send it to the database
+                            BasicMessage friendlyMessage = new BasicMessage(null, mUsername, downloadUrl.toString());
+                            mMessagesDatabaseReference.push().setValue(friendlyMessage);
+                        }
+                    });
+        }
+
+        if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
+            Log.d("CameraDemo", "Pic saved");
+            Bitmap bitmap;
+            LogUtil.d("Uri is: "+ uri.toString());
+            curFile = new File(uri.getPath());
+            AskWatson askWatson = new AskWatson(uri);
+            askWatson.execute();
+        }
+
+        if (requestCode == FILTER_PHOTO && resultCode == RESULT_OK){
             Uri selectedImageUri = data.getData();
 
             // Get a reference to store file at chat_photos/<FILENAME>
@@ -351,62 +383,96 @@ public class MainActivity extends AppCompatActivity {
         mMessageListView.setAdapter(mMessageAdapter);
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case 1: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+    public class AskWatson extends AsyncTask<Void, Void, Boolean>{
+        Uri uri;
+        DialogFragment frag = BasicDialogFragment.newInstance(R.string.Processing);
+        public AskWatson(Uri uri) {
+            super();
+            this.uri = uri;
+        }
 
-                    // permission was granted, yay! Do the
-                    // contacts-related task you need to do.
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            frag.show(getFragmentManager(),"dialog");
+        }
 
-                    AsyncTask.THREAD_POOL_EXECUTOR.execute(new Runnable() {
-                        @Override
-                        public void run() {
-                            LogUtil.d("starting to image recognize");
-                            service = new VisualRecognition(VisualRecognition.VERSION_DATE_2016_05_20);
-                            service.setApiKey("5969860b1f4bb027e4440408d436ea9a2f9d09d5");
-                            File dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES);
-                            LogUtil.d(dcim.getAbsolutePath());
-                            File pic = new File("/sdcard/DCIM/b.jpg");
+        @Override
+        protected Boolean doInBackground(Void... params) {
 
-                            ClassifyImagesOptions options = new ClassifyImagesOptions.Builder()
-                                    .images(pic)
-                                    .build();
+            LogUtil.d("starting to image recognize");
+            service = new VisualRecognition(VisualRecognition.VERSION_DATE_2016_05_20);
+            service.setApiKey("5969860b1f4bb027e4440408d436ea9a2f9d09d5");
+            File dcim = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES);
+            LogUtil.d(dcim.getAbsolutePath());
+            File pic = new File(mCurrentPhotoPath);
 
-                            VisualClassification result = service.classify(options).execute();
-                            LogUtil.d("Result for image classification" + result.toString());
+            ClassifyImagesOptions options = new ClassifyImagesOptions.Builder()
+                    .images(curFile)
+                    .build();
 
-                        }
-                    });
-
-                } else {
-
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
-                }
-                return;
+            VisualClassification result = service.classify(options).execute();
+            LogUtil.d("Result for image classification" + result.toString());
+            if (isAnimal(result)){
+                return true;
+            } else {
+                return false;
             }
+        }
 
-            // other 'case' lines to check for other
-            // permissions this app might request
+        @Override
+        protected void onPostExecute(Boolean aBoolean) {
+            super.onPostExecute(aBoolean);
+            frag.dismiss();
+            if (aBoolean) {
+                postImage(uri);
+            } else {
+
+                DialogFragment newFrag = BasicDialogFragment.newInstance(R.string.no_Animal);
+                newFrag.show(getFragmentManager(),"dialog");
+            }
         }
     }
 
-    public static void verifyStoragePermissions(Activity activity) {
-        // Check if we have write permission
-        int permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+    public void postImage(Uri uri){
+        Intent intent = new Intent(getApplicationContext(),ImageActivity.class);
+        intent.putExtra("ImageUri", uri.toString());
+        startActivityForResult(intent, FILTER_PHOTO);
+    }
 
-        if (permission != PackageManager.PERMISSION_GRANTED) {
-            // We don't have permission so prompt the user
-            ActivityCompat.requestPermissions(
-                    activity,
-                    PERMISSIONS_STORAGE,
-                    REQUEST_EXTERNAL_STORAGE
-            );
+    public Uri getImageUri(Context inContext, Bitmap inImage) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        inImage.compress(Bitmap.CompressFormat.JPEG, 100, bytes);
+        String path = MediaStore.Images.Media.insertImage(inContext.getContentResolver(), inImage, "Title", null);
+        return Uri.parse(path);
+    }
+
+    String mCurrentPhotoPath;
+
+    private File createImageFile() throws IOException {
+        // Create an image file name
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "JPEG_" + timeStamp + "_";
+        File storageDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM);
+        File image = File.createTempFile(
+                imageFileName,  /* prefix */
+                ".jpg",         /* suffix */
+                storageDir      /* directory */
+        );
+
+        // Save a file: path for use with ACTION_VIEW intents
+        mCurrentPhotoPath = image.getAbsolutePath();
+        return image;
+    }
+
+
+    public boolean isAnimal(VisualClassification result ){
+        if(result.toString().contains("animal")){
+            return true;
+        } else {
+            return false;
         }
+
+
     }
 }

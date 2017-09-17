@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">HackTheNorth2017</string>
+    <string name="app_name">Pic Purfect</string>
+    <string name="Processing">Processing</string>
+    <string name="no_Animal">No animal in the picture, sorry!</string>
 </resources>
