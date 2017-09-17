@@ -12,6 +12,7 @@
   limitations under the License
 -->
 <html lang="en">
+<div class="back">
 <head>
 
   <title>Chat</title>
@@ -19,14 +20,16 @@
   
   <link rel="stylesheet" href="styles/main.css">
 </head>
-<body>
+<body class="body-margin">
 <div >
 
   <!-- Header section containing logo -->
-  <header >
+  <header>
     <div >
-      <div>
-        <h3><i ></i> Chat</h3>
+      <div class="title">
+      <div class="crop">
+      <img src="images/catlogo2.png" class="tt" ></div>
+        <h2>Duck Duck Goose</h2>
       </div>
       <div hidden id="user-container">
         <div hidden id="user-pic"></div>
@@ -40,26 +43,25 @@
   </header>
 
   <main >
-    <div id="messages-card-container" >
+    <div class="messages-card" >
 
       <!-- Messages container -->
-      <div id="messages-card">
-          <div id="messages">
-            
-          </div>
-          <form id="message-form" >
-              <input id="message">
-              
-            </div>
+      <div class="messages-card-container">
+          <div id="messages"></div> 
+
+          <form hidden id="message-form" >
+              <input hidden id="message">
           </form>
-          <form id="image-form" action="#">
+            <!-- </div> -->
+          
+          <form class="msg" id="image-form" action="#">
             <input id="mediaCapture" type="file" accept="image/*,capture=camera">
-            <button id="submitImage" title="Add an image" >
+            <button hidden id="submitImage" title="Add an image" >
             </button>
           </form>
         </div>
       </div>
-    </div>
+    <!-- </div> -->
   </main>
 </div>
 
@@ -83,4 +85,5 @@
 
 <script src="scripts/main.js"></script>
 </body>
+</div>
 </html>

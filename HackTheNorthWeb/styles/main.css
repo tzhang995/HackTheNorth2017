@@ -24,16 +24,48 @@
   margin-bottom: 10px;
   height: calc(100% - 80px);
 }
+.body-margin {
+  margin: 0;
+}
+.background {
+  background-color: #BAD4AA;
+}
+.crop {
+  position: center;
+    width: 200px;
+    height: 150px;
+    overflow: hidden;
+    align-content: center;
+}
 
-
-
-
+.crop img {
+  position: center;
+    width: 400px;
+    height: 300px;
+    margin: -75px 0 0 -100px;
+}
 
 .message img {
   max-width: 600px;
   max-height: 400px;
+  float: left;
+  padding: 15px;
+}
+.messages-card {
+  background: #EBF5DF;
+  align-content: center;
+}
+.msg {
+  clear: left;
+  text-align: center;
+  padding: 15px 0;
 }
 
+.title {
+  text-align: center;
+  background-color: #BAD4AA;
+  padding: 5px;
+}
 
 
 
